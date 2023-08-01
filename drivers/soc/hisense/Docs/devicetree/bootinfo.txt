@@ -1,0 +1,36 @@
+Hisense device infomation
+============================================
+
+Description
+----------------
+Keymap is used to configure the buttons, after which log will be printed when
+the key is pressed.
+while protect gpios is mainly a list of gpios used by trustzone according to
+different products.
+
+
+List of legacy properties and respective binding document
+---------------------------------------------------------
+1. "dev,keymap-names"       device support keys list 
+   "dev,keymap-values"      the value list of keys 
+
+2. "dev,prot-gpios"         protect gpios by trustzone
+
+
+For example:
+
+&soc {
+	his_devinfo {
+		status = "okay";
+
+		/* The number of name and value MUST be same */
+		dev,keymap-names = "POWER", "DOWN", "UP";
+		dev,keymap-values = <116>, <114>, <115>;
+
+		/* protect gpios by trustzone */
+		dev,prot-gpios = <
+				0  1  2  3
+				81 82 83 84>;
+	};
+};
+

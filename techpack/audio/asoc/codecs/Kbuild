@@ -219,6 +219,12 @@ ifdef CONFIG_AUDIO_QGKI
 endif
 endif
 
+# for SOC PA_AW87529 SOC_PA
+ifdef CONFIG_SND_SOC_AW87XXX
+       SOC_AW87XXX_OBJS += aw87xxx.o
+       SOC_AW87XXX_OBJS += aw87xxx_monitor.o
+endif
+
 ifdef CONFIG_SND_SOC_WCD_IRQ
 	CORE_OBJS += wcd-irq.o
 endif
@@ -273,6 +279,7 @@ ifeq ($(KERNEL_BUILD), 1)
 	obj-y	+= wcd938x/
 	obj-y	+= bolero/
 	obj-y	+= wsa883x/
+	obj-y	+= aw882xx/
 	obj-y	+= rouleur/
 endif
 # Module information used by KBuild framework
@@ -311,6 +318,9 @@ ifdef CONFIG_AUDIO_QGKI
 obj-$(CONFIG_SND_SOC_MSM_HDMI_CODEC_RX) += hdmi_dlkm.o
 hdmi_dlkm-y := $(HDMICODEC_OBJS)
 endif
+
+obj-$(CONFIG_SND_SOC_AW87XXX) += aw87xxx_dlkm.o
+aw87xxx_dlkm-y := $(SOC_AW87XXX_OBJS)
 
 obj-$(CONFIG_SND_SWR_HAPTICS) += swr_haptics_dlkm.o
 swr_haptics_dlkm-y := $(SWR_HAP_OBJS)

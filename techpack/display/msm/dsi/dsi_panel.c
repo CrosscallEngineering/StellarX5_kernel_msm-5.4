@@ -18,6 +18,13 @@
 #include "sde_dsc_helper.h"
 #include "sde_vdc_helper.h"
 
+#ifdef CONFIG_HISENSE_DEBUG_CTRL
+#include <linux/his_debug_base.h>
+#endif /* CONFIG_HISENSE_DEBUG_CTRL */
+#ifdef CONFIG_HISENSE_PRODUCT_DEVINFO
+#include <linux/productinfo.h>
+#endif /*CONFIG_HISENSE_PRODUCT_DEVINFO*/
+
 /**
  * topology is currently defined by a set of following 3 values:
  * 1. num of layer mixers
@@ -36,6 +43,14 @@
 #define DEFAULT_PANEL_PREFILL_LINES	25
 #define HIGH_REFRESH_RATE_THRESHOLD_TIME_US	500
 #define MIN_PREFILL_LINES      40
+extern int ts_supend_need_power_reset_high(void);
+extern void ts_suspend_for_lcd_async_use(void);
+extern void ts_resume_for_lcd_async_use(void);
+extern void ts_reset_for_lcd_use(void);
+
+#ifdef CONFIG_AW99703_LCD_BL
+extern aw99703_set_brightness_for_lcd_use(int brt_val);
+#endif
 
 static void dsi_dce_prepare_pps_header(char *buf, u32 pps_delay_ms)
 {
@@ -155,6 +170,26 @@ static int dsi_panel_gpio_request(struct dsi_panel *panel)
 		}
 	}
 
+	if (gpio_is_valid(panel->vsp_en_gpio)) {
+		rc = gpio_request(panel->vsp_en_gpio, "vsp_en_gpio");
+		if (rc) {
+			DSI_WARN("request for vsp_en_gpio failed, rc=%d\n",
+				 rc);
+			panel->vsp_en_gpio = -1;
+			rc = 0;
+		}
+	}
+
+	if (gpio_is_valid(panel->vsn_en_gpio)) {
+		rc = gpio_request(panel->vsn_en_gpio, "vsn_en_gpio");
+		if (rc) {
+			DSI_WARN("request for vsn_en_gpio failed, rc=%d\n",
+				 rc);
+			panel->vsn_en_gpio = -1;
+			rc = 0;
+		}
+	}
+
 	goto error;
 error_release_mode_sel:
 	if (gpio_is_valid(panel->bl_config.en_gpio))
@@ -188,6 +223,12 @@ static int dsi_panel_gpio_release(struct dsi_panel *panel)
 
 	if (gpio_is_valid(panel->panel_test_gpio))
 		gpio_free(panel->panel_test_gpio);
+
+	if (gpio_is_valid(panel->vsp_en_gpio))
+		gpio_free(panel->vsp_en_gpio);
+
+	if (gpio_is_valid(panel->vsn_en_gpio))
+		gpio_free(panel->vsn_en_gpio);
 
 	return rc;
 }
@@ -338,25 +379,53 @@ static int dsi_panel_power_on(struct dsi_panel *panel)
 {
 	int rc = 0;
 
-	rc = dsi_pwr_enable_regulator(&panel->power_info, true);
-	if (rc) {
-		DSI_ERR("[%s] failed to enable vregs, rc=%d\n",
-				panel->name, rc);
-		goto exit;
-	}
-
 	rc = dsi_panel_set_pinctrl_state(panel, true);
 	if (rc) {
 		DSI_ERR("[%s] failed to set pinctrl, rc=%d\n", panel->name, rc);
 		goto error_disable_vregs;
 	}
 
+	if (!ts_supend_need_power_reset_high()) {
+		//control tp reset to hight
+		ts_reset_for_lcd_use();
+		/* hmct modify */
+		if (!panel->vdd_always_on || !panel->vdd_state) {
+			rc = dsi_pwr_enable_regulator(&panel->power_info, true);
+			if (rc) {
+				DSI_ERR("[%s] failed to enable vregs, rc=%d\n",
+						panel->name, rc);
+				goto exit;
+			}
+			panel->vdd_state = true;
+		} 
+
+		if(gpio_is_valid(panel->vsp_en_gpio)){
+			usleep_range(1000, 1000 + 100);
+			rc = gpio_direction_output(panel->vsp_en_gpio, 1);
+			if(rc){
+				DSI_ERR("[%s] failed to enable vsp, rc=%d\n", panel->vsp_en_gpio, rc);
+				goto exit;
+			}
+			usleep_range(4*1000, 4*1000 + 100);
+		}
+
+		if(gpio_is_valid(panel->vsn_en_gpio)){
+			rc = gpio_direction_output(panel->vsn_en_gpio, 1);
+			if(rc){
+				DSI_ERR("[%s] failed to enable vsn, rc=%d\n", panel->vsn_en_gpio, rc);
+				goto exit;
+			}
+		}
+		usleep_range(15*1000, 15*1000 + 100);
+		DSI_INFO("lcd power on\n");
+	}
 	rc = dsi_panel_reset(panel);
 	if (rc) {
 		DSI_ERR("[%s] failed to reset panel, rc=%d\n", panel->name, rc);
 		goto error_disable_gpio;
 	}
-
+	DSI_DEBUG("[%s] panel power on successful\n", panel->name);
+	
 	goto exit;
 
 error_disable_gpio:
@@ -379,37 +448,61 @@ static int dsi_panel_power_off(struct dsi_panel *panel)
 {
 	int rc = 0;
 
-	if (panel->is_twm_en || panel->skip_panel_off) {
-		DSI_DEBUG("TWM Enabled, skip panel power off\n");
-		return rc;
-	}
-	if (gpio_is_valid(panel->reset_config.disp_en_gpio))
-		gpio_set_value(panel->reset_config.disp_en_gpio, 0);
+	ts_suspend_for_lcd_async_use();
+	if (!ts_supend_need_power_reset_high()){
+		if (panel->is_twm_en || panel->skip_panel_off) {
+			DSI_DEBUG("TWM Enabled, skip panel power off\n");
+			return rc;
+		}
+		if (gpio_is_valid(panel->reset_config.disp_en_gpio))
+			gpio_set_value(panel->reset_config.disp_en_gpio, 0);
 
-	if (gpio_is_valid(panel->reset_config.reset_gpio) &&
-					!panel->reset_gpio_always_on)
-		gpio_set_value(panel->reset_config.reset_gpio, 0);
+		if (gpio_is_valid(panel->reset_config.reset_gpio) &&
+						!panel->reset_gpio_always_on)
+			gpio_set_value(panel->reset_config.reset_gpio, 0);
 
-	if (gpio_is_valid(panel->reset_config.lcd_mode_sel_gpio))
-		gpio_set_value(panel->reset_config.lcd_mode_sel_gpio, 0);
+		if (gpio_is_valid(panel->reset_config.lcd_mode_sel_gpio))
+			gpio_set_value(panel->reset_config.lcd_mode_sel_gpio, 0);
 
-	if (gpio_is_valid(panel->panel_test_gpio)) {
-		rc = gpio_direction_input(panel->panel_test_gpio);
-		if (rc)
-			DSI_WARN("set dir for panel test gpio failed rc=%d\n",
-				 rc);
-	}
+		if (gpio_is_valid(panel->panel_test_gpio)) {
+			rc = gpio_direction_input(panel->panel_test_gpio);
+			if (rc)
+				DSI_WARN("set dir for panel test gpio failed rc=%d\n",
+					 rc);
+		}
+		if(gpio_is_valid(panel->vsn_en_gpio)){
+			usleep_range(1000, 1000 + 100);
+			rc = gpio_direction_output(panel->vsn_en_gpio, 0);
+			if(rc){
+				DSI_ERR("[%s] failed to enable vsn, rc=%d\n", panel->vsn_en_gpio, rc);
+				return rc;
+			}
+			usleep_range(4*1000, 4*1000 + 100);
+		}
+		if(gpio_is_valid(panel->vsp_en_gpio)){
+			rc = gpio_direction_output(panel->vsp_en_gpio, 0);
+			if(rc){
+				DSI_ERR("[%s] failed to enable vsp, rc=%d\n", panel->vsp_en_gpio, rc);
+				return rc;
+			}
+			usleep_range(4*1000, 4*1000 + 100);
+		}
+		if (!panel->vdd_always_on) {
+			rc = dsi_pwr_enable_regulator(&panel->power_info, false);
+			if (rc)
+				DSI_ERR("[%s] failed to enable vregs, rc=%d\n",
+						panel->name, rc);
+		}
+		DSI_DEBUG("[%s] panel power off successful\n", panel->name);
+		DSI_INFO("lcd panel power off\n");
+	}else
+		DSI_INFO("lcd power remain, for tp open gesture\n");
 
 	rc = dsi_panel_set_pinctrl_state(panel, false);
 	if (rc) {
 		DSI_ERR("[%s] failed set pinctrl state, rc=%d\n", panel->name,
-		       rc);
+			   rc);
 	}
-
-	rc = dsi_pwr_enable_regulator(&panel->power_info, false);
-	if (rc)
-		DSI_ERR("[%s] failed to enable vregs, rc=%d\n",
-				panel->name, rc);
 
 	return rc;
 }
@@ -619,6 +712,7 @@ error:
 	return rc;
 }
 
+
 int dsi_panel_set_backlight(struct dsi_panel *panel, u32 bl_lvl)
 {
 	int rc = 0;
@@ -627,7 +721,12 @@ int dsi_panel_set_backlight(struct dsi_panel *panel, u32 bl_lvl)
 	if (panel->host_config.ext_bridge_mode)
 		return 0;
 
-	DSI_DEBUG("backlight type:%d lvl:%d\n", bl->type, bl_lvl);
+
+#ifdef CONFIG_HISENSE_DEBUG_CTRL
+	his_set_curr_backlight_state(bl_lvl);
+#endif /* CONFIG_HISENSE_DEBUG_CTRL */
+
+	DSI_DEBUG("[%s] backlight type:%d lvl:%d\n", panel->name, bl->type, bl_lvl);
 	switch (bl->type) {
 	case DSI_BACKLIGHT_WLED:
 		rc = backlight_device_set_brightness(bl->raw_bd, bl_lvl);
@@ -636,6 +735,9 @@ int dsi_panel_set_backlight(struct dsi_panel *panel, u32 bl_lvl)
 		rc = dsi_panel_update_backlight(panel, bl_lvl);
 		break;
 	case DSI_BACKLIGHT_EXTERNAL:
+		#ifdef CONFIG_AW99703_LCD_BL
+		aw99703_set_brightness_for_lcd_use(bl_lvl);
+		#endif
 		break;
 	case DSI_BACKLIGHT_PWM:
 		rc = dsi_panel_update_pwm_backlight(panel, bl_lvl);
@@ -2085,6 +2187,9 @@ static int dsi_panel_parse_misc_features(struct dsi_panel *panel)
 	panel->reset_gpio_always_on = utils->read_bool(utils->data,
 			"qcom,platform-reset-gpio-always-on");
 
+	/* hmct add */
+	panel->vdd_always_on = utils->read_bool(utils->data,
+			"qcom,platform-vdd-always-on");
 	panel->skip_panel_off = utils->read_bool(utils->data,
 			"qcom,skip-panel-power-off");
 
@@ -2298,6 +2403,19 @@ static int dsi_panel_parse_gpios(struct dsi_panel *panel)
 		DSI_DEBUG("%s:%d panel test gpio not specified\n", __func__,
 			 __LINE__);
 
+	panel->vsp_en_gpio = utils->get_named_gpio(utils->data,
+					"qcom,platform-vsp-en-gpio",
+					0);
+	if (!gpio_is_valid(panel->vsp_en_gpio))
+		printk(KERN_ERR "%s:%d vsp en gpio not specified\n", __func__,
+			 __LINE__);
+
+	panel->vsn_en_gpio = utils->get_named_gpio(utils->data,
+					"qcom,platform-vsn-en-gpio",
+					0);
+	if (!gpio_is_valid(panel->vsn_en_gpio))
+		printk(KERN_ERR "%s:%d vsn en gpio not specified\n", __func__,
+			 __LINE__);
 error:
 	return rc;
 }
@@ -3501,6 +3619,10 @@ struct dsi_panel *dsi_panel_get(struct device *parent,
 				"qcom,mdss-dsi-panel-name", NULL);
 	if (!panel->name)
 		panel->name = DSI_PANEL_DEFAULT_LABEL;
+	
+  #ifdef CONFIG_HISENSE_PRODUCT_DEVINFO
+    productinfo_register(PRODUCTINFO_LCD_ID, panel->name, NULL);
+  #endif
 
 	/*
 	 * Set panel type to LCD as default.
@@ -4376,6 +4498,7 @@ int dsi_panel_prepare(struct dsi_panel *panel)
 		       panel->name, rc);
 		goto error;
 	}
+	DSI_INFO("lcd panel on\n");
 
 error:
 	mutex_unlock(&panel->panel_lock);
@@ -4681,6 +4804,7 @@ int dsi_panel_enable(struct dsi_panel *panel)
 	else
 		panel->panel_initialized = true;
 	mutex_unlock(&panel->panel_lock);
+	ts_resume_for_lcd_async_use();
 	return rc;
 }
 
@@ -4795,6 +4919,7 @@ int dsi_panel_unprepare(struct dsi_panel *panel)
 		       panel->name, rc);
 		goto error;
 	}
+	DSI_INFO("lcd panel off\n");
 
 error:
 	mutex_unlock(&panel->panel_lock);

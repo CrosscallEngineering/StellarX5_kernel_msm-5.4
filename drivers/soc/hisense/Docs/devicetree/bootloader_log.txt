@@ -1,0 +1,24 @@
+show bootloader log in kernel
+============================================
+
+Description
+----------------
+Use to implement the bootloader log to be checked via sysfs attr.
+
+List of legacy properties and respective binding document
+---------------------------------------------------------
+1. compatible                 "debug,bootlog"
+2. linux,contiguous-region    the reserve memory space
+3. second_log_offset          the second bootloader log start position
+
+For example:
+
+&soc {
+	boot_log_drv {
+		compatible = "debug,bootlog";
+		linux,contiguous-region = <&bootlog_mem>;
+		second_log_offset = <0x40000>;
+		status = "okay";
+	};
+};
+

@@ -863,6 +863,14 @@ static int set_config(struct usb_composite_dev *cdev,
 	unsigned		power = gadget_is_otg(gadget) ? 8 : 100;
 	int			tmp;
 
+	/* Hisense add for solving usb device repeating enumeration */
+	if ((gadget->state == USB_STATE_CONFIGURED) &&
+			(cdev->config) &&
+			(cdev->config->bConfigurationValue == number)) {
+		pr_info("%s Don't need set_config again\n", __func__);
+		return 0;
+	}
+
 	if (number) {
 		list_for_each_entry(c, &cdev->configs, list) {
 			if (c->bConfigurationValue == number) {

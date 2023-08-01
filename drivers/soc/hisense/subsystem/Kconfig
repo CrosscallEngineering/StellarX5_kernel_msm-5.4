@@ -1,0 +1,8 @@
+
+config HISENSE_RESTART_MODEM
+	bool "force restart modem subsystem"
+	depends on HISENSE_DEBUG_CTRL
+	default n
+	help
+	  Provide a node for control to restart modem
+

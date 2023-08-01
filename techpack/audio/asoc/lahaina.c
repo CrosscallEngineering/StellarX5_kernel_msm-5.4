@@ -73,7 +73,7 @@
 #define CODEC_EXT_CLK_RATE          9600000
 #define ADSP_STATE_READY_TIMEOUT_MS 3000
 #define DEV_NAME_STR_LEN            32
-#define WCD_MBHC_HS_V_MAX           1600
+#define WCD_MBHC_HS_V_MAX           1700  /*hmct added, for factory test headset check fail*/
 
 #define TDM_CHANNEL_MAX		8
 
@@ -729,6 +729,13 @@ static char const *bt_sample_rate_tx_text[] = {"KHZ_8", "KHZ_16",
 					"KHZ_88P2", "KHZ_96"};
 static const char *const afe_loopback_tx_ch_text[] = {"One", "Two"};
 
+
+/*hmct added, for aw87529*/
+#ifdef CONFIG_SND_SOC_AW87XXX  
+static const char *const mode_function_text[] = { "Off", "Music", "Voice", "Fm","Rcv" };
+#endif 
+/*hmct added end, for aw87529*/
+
 static SOC_ENUM_SINGLE_EXT_DECL(usb_rx_sample_rate, usb_sample_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(usb_tx_sample_rate, usb_sample_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(usb_rx_format, bit_format_text);
@@ -915,6 +922,12 @@ static SOC_ENUM_SINGLE_EXT_DECL(bt_sample_rate_rx, bt_sample_rate_rx_text);
 static SOC_ENUM_SINGLE_EXT_DECL(bt_sample_rate_tx, bt_sample_rate_tx_text);
 static SOC_ENUM_SINGLE_EXT_DECL(afe_loopback_tx_chs, afe_loopback_tx_ch_text);
 
+/*hmct added, for aw87529*/
+#ifdef CONFIG_SND_SOC_AW87XXX
+static SOC_ENUM_SINGLE_EXT_DECL(mode_function,mode_function_text);
+#endif 
+/*hmct added end, for aw87529*/
+
 static bool is_initial_boot;
 static bool codec_reg_done;
 static struct snd_soc_card snd_soc_card_lahaina_msm;
@@ -925,7 +938,9 @@ static int dmic_4_5_gpio_cnt;
 static void *def_wcd_mbhc_cal(void);
 
 static int msm_rx_tx_codec_init(struct snd_soc_pcm_runtime*);
-static int msm_int_wsa_init(struct snd_soc_pcm_runtime*);
+
+/*hmct added ,for remove wsa */
+//static int msm_int_wsa_init(struct snd_soc_pcm_runtime*);
 
 /*
  * Need to report LINEIN
@@ -951,7 +966,12 @@ static struct wcd_mbhc_config wcd_mbhc_cfg = {
 	.mbhc_micbias = MIC_BIAS_2,
 	.anc_micbias = MIC_BIAS_2,
 	.enable_anc_mic_detect = false,
+#if IS_ENABLED(CONFIG_QCOM_FSA4480_I2C)
+	.moisture_duty_cycle_en = false,
+#else
 	.moisture_duty_cycle_en = true,
+#endif
+
 };
 
 /* set audio task affinity to core 1 & 2 */
@@ -3685,6 +3705,61 @@ static int msm_bt_sample_rate_tx_put(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+
+/*hmct added, for aw87529 kcontrol*/
+#ifdef CONFIG_SND_SOC_AW87XXX
+extern unsigned char aw87xxx_show_current_mode(int32_t channel);
+extern int aw87xxx_audio_scene_load(uint8_t mode, int32_t channel);
+//static const char *const mode_function[] = { "Off", "Music", "Voice", "Fm","Rcv" };
+static int aw87xxx_mode_get_a(struct snd_kcontrol *kcontrol,
+							struct snd_ctl_elem_value *ucontrol)
+{
+	unsigned char current_mode;
+	current_mode = aw87xxx_show_current_mode(0);
+	ucontrol->value.integer.value[0] = current_mode;
+	pr_info("%s: get mode:%d\n", __func__, current_mode);
+	return 0;
+}
+static int aw87xxx_mode_set_a(struct snd_kcontrol *kcontrol,
+							struct snd_ctl_elem_value *ucontrol)
+{
+	int ret = 0;
+	unsigned char set_mode;
+	set_mode = ucontrol->value.integer.value[0];
+	ret = aw87xxx_audio_scene_load(set_mode,0);
+	if (ret < 0) {
+		pr_err("%s: mode:%d set failed\n", __func__, set_mode);
+		return -EPERM;
+	}
+	pr_info("%s: set mode:%d success", __func__, set_mode);
+	return 0;
+}
+static int aw87xxx_mode_get_b(struct snd_kcontrol *kcontrol,
+							struct snd_ctl_elem_value *ucontrol)
+{
+	unsigned char current_mode;
+	current_mode = aw87xxx_show_current_mode(1);
+	ucontrol->value.integer.value[0] = current_mode;
+	pr_info("%s: get mode:%d\n", __func__, current_mode);
+	return 0;
+}
+static int aw87xxx_mode_set_b(struct snd_kcontrol *kcontrol,
+							struct snd_ctl_elem_value *ucontrol)
+{
+	int ret = 0;
+	unsigned char set_mode;
+	set_mode = ucontrol->value.integer.value[0];
+	ret = aw87xxx_audio_scene_load(set_mode,1);
+	if (ret < 0) {
+		pr_err("%s: mode:%d set failed\n", __func__, set_mode);
+		return -EPERM;
+	}
+	pr_info("%s: set mode:%d success", __func__, set_mode);
+	return 0;
+}
+#endif
+/*hmct add, end*/
+
 static const struct snd_kcontrol_new msm_int_snd_controls[] = {
 	SOC_ENUM_EXT("WSA_CDC_DMA_RX_0 Channels", wsa_cdc_dma_rx_0_chs,
 			cdc_dma_rx_ch_get, cdc_dma_rx_ch_put),
@@ -3784,6 +3859,14 @@ static const struct snd_kcontrol_new msm_int_snd_controls[] = {
 			va_cdc_dma_tx_2_sample_rate,
 			cdc_dma_tx_sample_rate_get,
 			cdc_dma_tx_sample_rate_put),
+/*hmct added, for aw87529*/
+#ifdef CONFIG_SND_SOC_AW87XXX
+		SOC_ENUM_EXT("aw87xxx_mode_switch_a", mode_function,
+		aw87xxx_mode_get_a, aw87xxx_mode_set_a),
+		SOC_ENUM_EXT("aw87xxx_mode_switch_b", mode_function,
+		aw87xxx_mode_get_b, aw87xxx_mode_set_b),
+#endif 
+/*hmct added end, for aw87529*/
 };
 
 static const struct snd_kcontrol_new msm_int_wcd9370_snd_controls[] = {
@@ -5788,15 +5871,16 @@ static void *def_wcd_mbhc_cal(void)
 	btn_high = ((void *)&btn_cfg->_v_btn_low) +
 		(sizeof(btn_cfg->_v_btn_low[0]) * btn_cfg->num_btn);
 
+	/*hmct use these values*/
 	btn_high[0] = 75;
-	btn_high[1] = 150;
-	btn_high[2] = 237;
-	btn_high[3] = 500;
-	btn_high[4] = 500;
-	btn_high[5] = 500;
-	btn_high[6] = 500;
-	btn_high[7] = 500;
-
+	btn_high[1] = 76;
+	btn_high[2] = 280;
+	btn_high[3] = 450;
+	btn_high[4] = 460;
+	btn_high[5] = 460;
+	btn_high[6] = 460;
+	btn_high[7] = 460;
+	
 	return wcd_mbhc_cal;
 }
 
@@ -6244,6 +6328,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
 	},
 };
 
+#if 0 //hmct added, for remove wsa
 static struct snd_soc_dai_link msm_bolero_fe_dai_links[] = {
 	{/* hw:x,33 */
 		.name = LPASS_BE_WSA_CDC_DMA_TX_0,
@@ -6256,6 +6341,7 @@ static struct snd_soc_dai_link msm_bolero_fe_dai_links[] = {
 		SND_SOC_DAILINK_REG(wsa_cdcdma0_capture),
 	},
 };
+#endif
 
 static struct snd_soc_dai_link msm_bolero_fe_stub_dai_links[] = {
 	{/* hw:x,33 */
@@ -6423,6 +6509,44 @@ static struct snd_soc_dai_link msm_common_misc_fe_dai_links[] = {
 		.ignore_pmdown_time = 1,
 		SND_SOC_DAILINK_REG(display_port_hostless),
 	},
+	/*hmct add*/
+	{/* hw:x,46 */
+		.name = "Primary MI2S_TX Hostless",
+		.stream_name = "Primary MI2S_TX Hostless Capture",
+		.dynamic = 1,
+		.dpcm_capture = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+		SND_SOC_DAILINK_REG(pri_mi2s_tx_hostless),
+	},
+	{/* hw:x,47 */
+		.name = "Primary MI2S_RX Hostless",
+		.stream_name = "Primary MI2S_RX Hostless Playback",
+		.dynamic = 1,
+		.dpcm_playback = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+		SND_SOC_DAILINK_REG(pri_mi2s_rx_hostless),
+	},	
+	{/* hw:x,48 */
+		.name = "Quinary MI2S TX_Hostless",
+		.stream_name = "Quinary MI2S_TX Hostless Capture",
+		.dynamic = 1,
+		.dpcm_capture = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+						SND_SOC_DPCM_TRIGGER_POST},
+		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+		SND_SOC_DAILINK_REG(quin_mi2s_tx_hostless),
+	},
+	/*hmct end*/
 };
 
 static struct snd_soc_dai_link msm_common_be_dai_links[] = {
@@ -7062,6 +7186,7 @@ static struct snd_soc_dai_link msm_auxpcm_be_dai_links[] = {
 };
 #endif
 
+#if 0 // hmct added ,for remove wsa
 static struct snd_soc_dai_link msm_wsa_cdc_dma_be_dai_links[] = {
 	/* WSA CDC DMA Backend DAI Links */
 	{
@@ -7112,6 +7237,7 @@ static struct snd_soc_dai_link msm_wsa_cdc_dma_be_dai_links[] = {
 		SND_SOC_DAILINK_REG(wsa_dma_tx0_vi),
 	},
 };
+#endif
 
 static struct snd_soc_dai_link msm_rx_tx_cdc_dma_be_dai_links[] = {
 	/* RX CDC DMA Backend DAI Links */
@@ -7283,14 +7409,12 @@ static struct snd_soc_dai_link msm_afe_rxtx_lb_be_dai_link[] = {
 
 static struct snd_soc_dai_link msm_lahaina_dai_links[
 			ARRAY_SIZE(msm_common_dai_links) +
-			ARRAY_SIZE(msm_bolero_fe_dai_links) +
 			ARRAY_SIZE(msm_common_misc_fe_dai_links) +
 			ARRAY_SIZE(msm_common_be_dai_links) +
 			ARRAY_SIZE(msm_mi2s_be_dai_links) +
 #ifndef CONFIG_AUXPCM_DISABLE
 			ARRAY_SIZE(msm_auxpcm_be_dai_links) +
 #endif
-			ARRAY_SIZE(msm_wsa_cdc_dma_be_dai_links) +
 			ARRAY_SIZE(msm_rx_tx_cdc_dma_be_dai_links) +
 			ARRAY_SIZE(msm_va_cdc_dma_be_dai_links) +
 #if IS_ENABLED(CONFIG_AUDIO_QGKI)
@@ -7633,18 +7757,13 @@ static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 				 __func__, dev->of_node->full_name, rc);
 			wsa_max_devs = 0;
 		}
+
 		if (!wsa_max_devs) {
 			memcpy(msm_lahaina_dai_links + total_links,
 				msm_bolero_fe_stub_dai_links,
 				sizeof(msm_bolero_fe_stub_dai_links));
 			total_links +=
 				ARRAY_SIZE(msm_bolero_fe_stub_dai_links);
-		} else {
-			memcpy(msm_lahaina_dai_links + total_links,
-				msm_bolero_fe_dai_links,
-				sizeof(msm_bolero_fe_dai_links));
-			total_links +=
-				ARRAY_SIZE(msm_bolero_fe_dai_links);
 		}
 		memcpy(msm_lahaina_dai_links + total_links,
 		       msm_common_misc_fe_dai_links,
@@ -7662,13 +7781,7 @@ static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 		total_links +=
 			ARRAY_SIZE(msm_rx_tx_cdc_dma_be_dai_links);
 
-		if (wsa_max_devs) {
-			memcpy(msm_lahaina_dai_links + total_links,
-				msm_wsa_cdc_dma_be_dai_links,
-				sizeof(msm_wsa_cdc_dma_be_dai_links));
-			total_links +=
-				ARRAY_SIZE(msm_wsa_cdc_dma_be_dai_links);
-		}
+	
 		memcpy(msm_lahaina_dai_links + total_links,
 		       msm_va_cdc_dma_be_dai_links,
 		       sizeof(msm_va_cdc_dma_be_dai_links));
@@ -7780,6 +7893,7 @@ static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 	return card;
 }
 
+#if 0 // hmct added ,for remove wsa
 static int msm_int_wsa_init(struct snd_soc_pcm_runtime *rtd)
 {
 	u8 spkleft_ports[WSA883X_MAX_SWR_PORTS] = {0, 1, 2, 3};
@@ -7836,7 +7950,7 @@ static int msm_int_wsa_init(struct snd_soc_pcm_runtime *rtd)
 
 	return 0;
 }
-
+#endif
 static int msm_rx_tx_codec_init(struct snd_soc_pcm_runtime *rtd)
 {
 	struct snd_soc_component *component = NULL;

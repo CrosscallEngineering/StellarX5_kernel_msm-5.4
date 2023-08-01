@@ -1,0 +1,44 @@
+product's sale name report
+============================================
+
+Description
+----------------
+Due to the differences of momery or other peripherals, the same product is
+divided into different configurations, so it is necessary to distinguish these
+products. There are two ways to realize the differentiation, one is to realize
+the differentiation by automatically detecting hardware configuration, and the
+other is to realize by reading serial number from diag partition.
+
+
+List of legacy properties and respective binding document
+---------------------------------------------------------
+1. "dev,read_via_diag"      <1> - use serial number to realize 
+                            <0> - use hardware info
+2. "dev,projectname-list"   sale names list
+
+
+For example:
+
+&soc {
+	his_projectname {
+		status = "okay";
+		dev,read_via_diag = <0>;
+		dev,projectname-list =
+				"6+64",   "T91_1",
+				"8+64",   "T91_2",
+				"8+128",  "T91_3";
+	};
+};
+
+or:
+
+&soc {
+	his_projectname {
+		status = "okay";
+		dev,read_via_diag = <1>;
+		dev,projectname-list =
+				"112233",  "T91_1",
+				"445566",  "T91_2",
+	};
+};
+

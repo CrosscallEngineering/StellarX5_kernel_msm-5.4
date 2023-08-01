@@ -30,6 +30,11 @@
 struct mutex hphl_pa_lock;
 struct mutex hphr_pa_lock;
 
+#if IS_ENABLED(CONFIG_QCOM_FSA4480_I2C)
+int usbc_det_status=0;
+//extern int headset_status;
+#endif
+
 void wcd_mbhc_jack_report(struct wcd_mbhc *mbhc,
 			  struct snd_soc_jack *jack, int status, int mask)
 {
@@ -545,6 +550,11 @@ void wcd_mbhc_hs_elec_irq(struct wcd_mbhc *mbhc, int irq_type,
 		return;
 	}
 
+#if IS_ENABLED(CONFIG_QCOM_FSA4480_I2C)
+		 enable=false;
+   pr_info("%s:disable\n",__func__);
+#endif
+
 	pr_debug("%s: irq: %d, enable: %d, intr_status:%lu\n",
 		 __func__, irq, enable, mbhc->intr_status);
 	if ((test_bit(irq_type, &mbhc->intr_status)) != enable) {
@@ -566,7 +576,8 @@ void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 
 	WCD_MBHC_RSC_ASSERT_LOCKED(mbhc);
 
-	pr_debug("%s: enter insertion %d hph_status %x\n",
+	/*hmct modified*/
+	pr_info("%s: enter insertion %d hph_status %x\n",
 		 __func__, insertion, mbhc->hph_status);
 	if (!insertion) {
 		/* Report removal */
@@ -604,6 +615,8 @@ void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 
 		mbhc->hph_type = WCD_MBHC_HPH_NONE;
 		mbhc->zl = mbhc->zr = 0;
+		/*hmct modified*/
+		mbhc->is_hs_inserted = false;
 		pr_debug("%s: Reporting removal %d(%x)\n", __func__,
 			 jack_type, mbhc->hph_status);
 		wcd_mbhc_jack_report(mbhc, &mbhc->headset_jack,
@@ -646,6 +659,8 @@ void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 			}
 			mbhc->hph_type = WCD_MBHC_HPH_NONE;
 			mbhc->zl = mbhc->zr = 0;
+			/*hmct modified*/
+			mbhc->is_hs_inserted = false;
 			if (!mbhc->force_linein) {
 				pr_debug("%s: Reporting removal (%x)\n",
 					 __func__, mbhc->hph_status);
@@ -768,10 +783,22 @@ void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 
 		pr_debug("%s: Reporting insertion %d(%x)\n", __func__,
 			 jack_type, mbhc->hph_status);
+	
+#if IS_ENABLED(CONFIG_QCOM_FSA4480_I2C)	
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_L_DET_EN, 0);  //hmct added, disable LDET	
+#endif			 
+		/*hmct modified*/
+		mbhc->is_hs_inserted = true;
+		/*** BSP : added info log for headset detection @{ */
+		pr_info("%s: Reporting insertion, type=%d(1:Headphone, 3:Headset, 4:Lineout, 256:GND_MIC_SWAP)\n", __func__, jack_type);
+		/***  @} */
 		wcd_mbhc_jack_report(mbhc, &mbhc->headset_jack,
 				    (mbhc->hph_status | SND_JACK_MECHANICAL),
 				    WCD_MBHC_JACK_MASK);
 		wcd_mbhc_clr_and_turnon_hph_padac(mbhc);
+#if IS_ENABLED(CONFIG_QCOM_FSA4480_I2C)    
+        //headset_status = HEADSET_PLUGED;
+ #endif
 	}
 	pr_debug("%s: leave hph_status %x\n", __func__, mbhc->hph_status);
 }
@@ -826,8 +853,8 @@ void wcd_mbhc_find_plug_and_report(struct wcd_mbhc *mbhc,
 		pr_info("%s: mbhc deinit in progess: ignore report\n", __func__);
 		return;
 	}
-
-	pr_debug("%s: enter current_plug(%d) new_plug(%d)\n",
+    /*hmct modified*/
+	pr_info("%s: enter current_plug(%d) new_plug(%d)\n",
 		 __func__, mbhc->current_plug, plug_type);
 
 	WCD_MBHC_RSC_ASSERT_LOCKED(mbhc);
@@ -942,11 +969,15 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 	if (wcd_cancel_btn_work(mbhc))
 		pr_debug("%s: button press is canceled\n", __func__);
 
+#if IS_ENABLED(CONFIG_QCOM_FSA4480_I2C)
+     detection_type = usbc_det_status;
+#else
 	WCD_MBHC_REG_READ(WCD_MBHC_MECH_DETECTION_TYPE, detection_type);
 
 	/* Set the detection type appropriately */
 	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_MECH_DETECTION_TYPE,
 				 !detection_type);
+#endif 
 
 	pr_debug("%s: mbhc->current_plug: %d detection_type: %d\n", __func__,
 			mbhc->current_plug, detection_type);
@@ -967,6 +998,8 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 	if ((mbhc->current_plug == MBHC_PLUG_TYPE_NONE) &&
 	    detection_type) {
 
+         msleep(400); /*hmct add */
+		
 		/* If moisture is present, then enable polling, disable
 		 * moisture detection and wait for interrupt
 		 */
@@ -1091,12 +1124,19 @@ done:
 	pr_debug("%s: leave\n", __func__);
 }
 
+#if IS_ENABLED(CONFIG_QCOM_FSA4480_I2C)
+static irqreturn_t wcd_mbhc_mech_plug_detect_irq(int irq, void *data)
+{
+	int r = IRQ_HANDLED;	
+	return r;
+}
+#else 
 static irqreturn_t wcd_mbhc_mech_plug_detect_irq(int irq, void *data)
 {
 	int r = IRQ_HANDLED;
 	struct wcd_mbhc *mbhc = data;
 
-	pr_debug("%s: enter\n", __func__);
+	pr_info("%s: enter\n", __func__);/*hmct modified*/
 	if (mbhc == NULL) {
 		pr_err("%s: NULL irq data\n", __func__);
 		return IRQ_NONE;
@@ -1112,7 +1152,7 @@ static irqreturn_t wcd_mbhc_mech_plug_detect_irq(int irq, void *data)
 	pr_debug("%s: leave %d\n", __func__, r);
 	return r;
 }
-
+#endif
 int wcd_mbhc_get_button_mask(struct wcd_mbhc *mbhc)
 {
 	int mask = 0;
@@ -1160,8 +1200,8 @@ static void wcd_btn_lpress_fn(struct work_struct *work)
 
 	WCD_MBHC_REG_READ(WCD_MBHC_BTN_RESULT, btn_result);
 	if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADSET) {
-		pr_debug("%s: Reporting long button press event, btn_result: %d\n",
-			 __func__, btn_result);
+		pr_info("%s: Reporting long button press event, btn_result: %d\n",
+			 __func__, btn_result);/*hmct modified*/
 		wcd_mbhc_jack_report(mbhc, &mbhc->button_jack,
 				mbhc->buttons_pressed, mbhc->buttons_pressed);
 	}
@@ -1231,6 +1271,12 @@ static irqreturn_t wcd_mbhc_btn_press_handler(int irq, void *data)
 				__func__);
 		goto done;
 	}
+/*hmct modified,if headset is not reported,do not handle the button press irq*/
+	if (!mbhc->is_hs_inserted) {
+		pr_info("%s:headset is not reported\n", __func__);
+		goto done;
+	}
+
 	mbhc->buttons_pressed |= mask;
 	mbhc->mbhc_cb->lock_sleep(mbhc, true);
 	if (schedule_delayed_work(&mbhc->mbhc_btn_dwork,
@@ -1279,8 +1325,8 @@ static irqreturn_t wcd_mbhc_release_handler(int irq, void *data)
 	if (mbhc->buttons_pressed & WCD_MBHC_JACK_BUTTON_MASK) {
 		ret = wcd_cancel_btn_work(mbhc);
 		if (ret == 0) {
-			pr_debug("%s: Reporting long button release event\n",
-				 __func__);
+			pr_info("%s: Reporting long button release event\n",
+				 __func__);/*hmct modified*/
 			wcd_mbhc_jack_report(mbhc, &mbhc->button_jack,
 					0, mbhc->buttons_pressed);
 		} else {
@@ -1288,14 +1334,14 @@ static irqreturn_t wcd_mbhc_release_handler(int irq, void *data)
 				pr_debug("%s: Switch irq kicked in, ignore\n",
 					__func__);
 			} else {
-				pr_debug("%s: Reporting btn press\n",
-					 __func__);
+				pr_info("%s: Reporting btn press, buttons: 0x%x\n",
+				    __func__, mbhc->buttons_pressed); /*hmct modified*/
 				wcd_mbhc_jack_report(mbhc,
 						     &mbhc->button_jack,
 						     mbhc->buttons_pressed,
 						     mbhc->buttons_pressed);
 				pr_debug("%s: Reporting btn release\n",
-					 __func__);
+					 __func__);/*hmct modified*/
 				wcd_mbhc_jack_report(mbhc,
 						&mbhc->button_jack,
 						0, mbhc->buttons_pressed);
@@ -1625,7 +1671,7 @@ static int wcd_mbhc_usbc_ana_event_handler(struct notifier_block *nb,
 					   unsigned long mode, void *ptr)
 {
 	struct wcd_mbhc *mbhc = container_of(nb, struct wcd_mbhc, fsa_nb);
-
+    int usbc_temp;
 	if (!mbhc)
 		return -EINVAL;
 
@@ -1635,9 +1681,34 @@ static int wcd_mbhc_usbc_ana_event_handler(struct notifier_block *nb,
 		if (mbhc->mbhc_cb->clk_setup)
 			mbhc->mbhc_cb->clk_setup(mbhc->component, true);
 		/* insertion detected, enable L_DET_EN */
-		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_L_DET_EN, 1);
+		//WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_L_DET_EN, 1);		
+		usbc_temp =1;
+	}else{
+		usbc_temp =0;
 	}
-	return 0;
+
+	if (usbc_det_status != usbc_temp){
+	    usbc_det_status = usbc_temp;  
+		if (usbc_temp)
+	//	   headset_status = HEADSET_PLUGING;
+		
+        /*hmct modified*/
+		pr_info("%s: usbc_det_status = %d\n", __func__, usbc_det_status);
+		if (mbhc == NULL) {
+			pr_err("%s: NULL irq data\n", __func__);
+			return -EINVAL;
+		}
+		if (unlikely((mbhc->mbhc_cb->lock_sleep(mbhc, true)) == false)) {
+			pr_warn("%s: failed to hold suspend\n", __func__);
+			return -EINVAL;
+		} else {
+			/* Call handler */
+			wcd_mbhc_swch_irq_handler(mbhc);
+			mbhc->mbhc_cb->lock_sleep(mbhc, false);
+		}
+	}	
+	
+	return 0;	
 }
 #else
 static int wcd_mbhc_usbc_ana_event_handler(struct notifier_block *nb,

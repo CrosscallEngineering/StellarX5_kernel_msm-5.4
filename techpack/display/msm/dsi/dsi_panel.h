@@ -242,6 +242,9 @@ struct dsi_panel {
 	bool ulps_suspend_enabled;
 	bool allow_phy_power_off;
 	bool reset_gpio_always_on;
+	/* hmct add */
+	bool vdd_always_on;
+	bool vdd_state;
 	atomic_t esd_recovery_pending;
 
 	bool is_twm_en;
@@ -259,6 +262,8 @@ struct dsi_panel {
 	u32 dsc_count;
 	u32 lm_count;
 
+	int vsp_en_gpio;
+	int vsn_en_gpio;
 	int panel_test_gpio;
 	int power_mode;
 	enum dsi_panel_physical_type panel_type;

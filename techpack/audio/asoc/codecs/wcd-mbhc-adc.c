@@ -723,6 +723,11 @@ static void wcd_correct_swch_plug(struct work_struct *work)
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_DETECTION_DONE, 1);
 	}
 
+/*hmct modified, if current type is HEADSET, immediately return*/
+   if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADSET) {
+	   goto enable_supply;
+   }
+
 correct_plug_type:
 	/*
 	 * Callback to disable BCS slow insertion detection

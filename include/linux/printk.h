@@ -539,4 +539,6 @@ static inline void print_hex_dump_debug(const char *prefix_str, int prefix_type,
 #define print_hex_dump_bytes(prefix_str, prefix_type, buf, len)	\
 	print_hex_dump_debug(prefix_str, prefix_type, 16, 1, buf, len, true)
 
+#define pr_buf_err   pr_err
+#define pr_buf_info  pr_info
 #endif

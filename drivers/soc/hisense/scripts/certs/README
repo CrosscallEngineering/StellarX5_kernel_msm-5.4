@@ -1,0 +1,20 @@
+### File:
+
+- verity.pk8              # verify system private key
+- verity.x509.pem         # verify boot public key
+- verity_key              # verify system public key
+- avb_rsa4096.pem         # verify vbmeta private key
+
+### key生成方法：
+
+- verify key
+  development/tools/make_key verify_new '/C=CN/ST=ShanDong/L=QingDao/O=Hisense/OU=Mobile/CN=Hisense/emailAddress=hisense@hisense.com'
+
+- verify vbmeta key
+  openssl genrsa -out avb_rsa4096.pem 4096
+
+### 修改方法：
+
+verify boot和verify system的key更换说明，可以到Confluence查看如下文档：
+《软件总结文档_高通平台Verified boot key修改说明》
+

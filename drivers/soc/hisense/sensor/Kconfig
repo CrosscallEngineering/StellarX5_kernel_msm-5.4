@@ -1,0 +1,153 @@
+#
+# hisense sensors device configuration
+#
+config SENSORS
+	bool "Sensors Class Support"
+	help
+	  This option enables the sensor sysfs class in /sys/class/sensors.
+	  You'll need this to do anything useful with sensorss. If unsure, say N.
+
+menu "Hisense sensors device support"
+	depends on SENSORS
+
+config HS_SNS_ACC
+	bool "Provide Accelerometer Device Support"
+	default n
+	depends on SENSORS
+	help
+	  Say Y here, a list of availible accelerometer chips shall be shown.
+	  Then you can select one or more chip for one project.
+
+choice
+	prompt "Choice Acc sensor plant side"
+	default HS_SNS_ADSP_ACC
+	depends on HS_SNS_ACC
+
+config HS_SNS_AP_ACC
+	bool "The Acc sensor plant in the AP side"
+
+config HS_SNS_ADSP_ACC
+	bool "The Acc sensor plant in the ADSP side"
+	select HS_SNS_STEP
+
+endchoice
+
+config ACC_SENSOR_VENDOR
+	string "ACC SENSOR VENDOR"
+	depends on HS_SNS_ADSP_ACC
+	default ""
+	help
+		Add vendor info for ACC sensor.
+
+config ACC_SENSOR_TYPE
+	string "ACC SENSOR TYPE"
+	depends on HS_SNS_ADSP_ACC
+	default ""
+	help
+		Add type info for ACC sensor.
+
+config HS_SNS_MAG
+	bool "Provide Magnetic Device Support"
+	default n
+	depends on HS_SNS_ACC
+	help
+		Say Y here, a list of availible Magnetic chips shall be shown.
+		Then you can select one or more chip for one project.
+	
+choice
+	prompt "Choice Mag sensor plant side"
+	default HS_SNS_ADSP_MAG
+	depends on HS_SNS_MAG
+
+config HS_SNS_AP_MAG
+	bool "The Mag sensor plant in the AP side"
+
+config HS_SNS_ADSP_MAG
+	bool "The Mag sensor plant in the ADSP side"
+
+endchoice
+
+config MAG_SENSOR_VENDOR
+	string "MAG SENSOR VENDOR"
+	depends on HS_SNS_ADSP_MAG
+	default ""
+	help
+		Add vendor info for MAG sensor.
+		This option only used for ADSP.
+
+config MAG_SENSOR_TYPE
+	string "MAG SENSOR TYPE"
+	depends on HS_SNS_ADSP_MAG
+	default ""
+	help
+		Add type info for MAG sensor.
+		This option only used for ADSP.
+
+config HS_SNS_GYRO
+	bool "Provide Gyroscope Device Support"
+	default n
+	depends on HS_SNS_ACC
+	help
+	  Say Y here, a list of availible Gyroscope chips shall be shown.
+	  Then you can select one or more chip for one project.
+	
+choice
+	prompt "Choice Gyro sensor plant side"
+	default HS_SNS_ADSP_GYRO
+	depends on HS_SNS_GYRO
+
+config HS_SNS_AP_GYRO
+	bool "The Mag sensor plant in the AP side"
+
+config HS_SNS_ADSP_GYRO
+	bool "The Mag sensor plant in the ADSP side"
+
+endchoice
+
+config GYRO_SENSOR_VENDOR
+	string "GYRO SENSOR VENDOR"
+	depends on HS_SNS_ADSP_GYRO
+	default ""
+	help
+		Add vendor info for GYRO sensor.
+		This option only used for ADSP.
+
+config GYRO_SENSOR_TYPE
+	string "GYRO SENSOR TYPE"
+	depends on HS_SNS_ADSP_GYRO
+	default ""
+	help
+		Add type info for GYRO sensor.
+		This option only used for ADSP.
+
+config HS_SNS_ALS_PS
+	bool "Provide Optical Sensor Device Support"
+	default n
+	depends on SENSORS
+	help
+		Say Y here, a list of availible Optical Sensor chips shall be shown.
+
+config HS_SNS_ADSP_ALSPS
+	bool "Provide Optical Sensor Device Support"
+	default n
+	depends on SENSORS
+	help
+		Say Y here, a list of availible Optical Sensor chips shall be shown.
+
+config ALSP_SENSOR_VENDOR
+	string "ALSPS SENSOR VENDOR"
+	depends on HS_SNS_ADSP_ALSPS
+	default ""
+	help
+		Add vendor info for ALSPS sensor.
+		This option only used for ADSP.
+
+config ALSP_SENSOR_TYPE
+	string "ALSP SENSOR TYPE"
+	depends on HS_SNS_ADSP_ALSPS
+	default ""
+	help
+		Add type info for ALSPS sensor.
+		This option only used for ADSP.
+
+endmenu

@@ -1,0 +1,32 @@
+
+config HISENSE_CHARGE_FG_FUNCTION
+	bool "Add the hisense charge/fg driver"
+	depends on MACH_HISENSE_SMARTPHONE
+	default n
+	help
+	  Add the hisense charge function. Such as
+	  smb-charger,fg and so on.
+
+config HISENSE_WEAK_CHARGER
+	bool "Add the WEAK charger or line support"
+	depends on HISENSE_CHARGE_FG_FUNCTION
+	default n
+	help
+	  Add weak charger or line support.
+
+config HISENSE_TYPEC_OTG_CONTROL_FUNCTION
+	bool "type c OTG control"
+	depends on MACH_HISENSE_SMARTPHONE
+	default n
+	help
+	 y to use type c OTG control.
+	 n not using type c OTG control.
+
+config HISENSE_BATTERY_THERM_NTC_10K
+	bool "using battery thermal 10k ntc"
+	depends on MACH_HISENSE_SMARTPHONE
+	default n
+	help
+	 y to use 10k ntc.
+	 n to use default 100k ntc.
+

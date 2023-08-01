@@ -61,6 +61,15 @@ enum {
 	HPH_PA_DELAY,
 	AMIC2_BCS_ENABLE,
 };
+/*hmct added  begin, for double speaker factory*/
+struct kobject *factory_spk_test_kobj;
+enum {
+	SPK_1_ON = 0,
+	SPK_2_ON = 1,
+	SPK_BOTH_ON = 2,
+};
+int factory_test_spk_on = SPK_BOTH_ON;
+/*hmct added  end, for double speaker factory*/
 
 static const DECLARE_TLV_DB_SCALE(line_gain, 0, 7, 1);
 static const DECLARE_TLV_DB_SCALE(analog_gain, 0, 25, 1);
@@ -475,6 +484,58 @@ struct wcd937x_mbhc *wcd937x_soc_get_mbhc(struct snd_soc_component *component)
 	return wcd937x->mbhc;
 }
 EXPORT_SYMBOL(wcd937x_soc_get_mbhc);
+
+/*hmct added begin*/
+static ssize_t sysfs_speaker_test_show(struct device *dev,struct device_attribute *attr, char *buf)
+{
+    return sprintf(buf, "factory_spk_test_on = %d (spk-1-on = 0 , spk-2-on = 1 , both-on = 2)\n", factory_test_spk_on);
+}
+
+static ssize_t sysfs_speaker_test_store(struct device *dev,struct device_attribute *attr, const char *buf, size_t count)
+{
+	if (strncmp(buf, "0", sizeof("0") - 1) == 0)
+		factory_test_spk_on = SPK_1_ON;
+	else if (strncmp(buf, "1", sizeof("1") - 1) == 0)
+		factory_test_spk_on = SPK_2_ON;
+	else if (strncmp(buf, "2", sizeof("2") - 1) == 0)
+		factory_test_spk_on = SPK_BOTH_ON;
+	else
+		return -EINVAL;
+	return count;
+}
+
+static DEVICE_ATTR(speakertest, S_IRUGO | S_IWUSR | S_IWGRP, sysfs_speaker_test_show, sysfs_speaker_test_store);
+
+static int factory_spk_test_sysfs_init(void)
+{
+	int ret = 0;
+	factory_spk_test_kobj = kobject_create_and_add("factory_spk_test", NULL) ;
+    if (factory_spk_test_kobj == NULL)
+    {
+        pr_err("%s:subsystem_register failed\n", __func__);
+        return -ENOMEM;
+    }
+	ret = sysfs_create_file(factory_spk_test_kobj, &dev_attr_speakertest.attr);
+    if (ret)
+    {
+        pr_err("%s:spk_test_sysfs_create_file failed\n", __func__);
+        return ret;
+    }
+	return 0;
+}
+
+static void factory_spk_test_sysfs_deinit(void)
+{
+	sysfs_remove_file(factory_spk_test_kobj, &dev_attr_speakertest.attr);
+    kobject_del(factory_spk_test_kobj);
+}
+
+int msm_anlg_cdc_get_factory_test_spk_on(void)
+{
+	return factory_test_spk_on; 
+}
+EXPORT_SYMBOL(msm_anlg_cdc_get_factory_test_spk_on);
+/*hmct added end*/
 
 static int wcd937x_codec_hphl_dac_event(struct snd_soc_dapm_widget *w,
 					struct snd_kcontrol *kcontrol,
@@ -1711,6 +1772,11 @@ static int wcd937x_event_notify(struct notifier_block *block,
 	struct snd_soc_component *component = wcd937x->component;
 	struct wcd_mbhc *mbhc;
 
+    /*hmct added*/
+	static unsigned int adc1_vol;
+	static unsigned int adc2_vol;
+	static unsigned int adc3_vol;
+
 	switch (event) {
 	case BOLERO_SLV_EVT_TX_CH_HOLD_CLEAR:
 		if (amic == 0x1 || amic == 0x2)
@@ -1732,6 +1798,13 @@ static int wcd937x_event_notify(struct notifier_block *block,
 					0x80, 0x00);
 		break;
 	case BOLERO_SLV_EVT_SSR_DOWN:
+		 /*hmct add to save the ADC volume before Modem reboot.*/
+		adc1_vol=snd_soc_component_read32(component, WCD937X_ANA_TX_CH1);
+		adc2_vol=snd_soc_component_read32(component, WCD937X_ANA_TX_CH2);
+		adc3_vol=snd_soc_component_read32(component, WCD937X_ANA_TX_CH3);
+		printk("%s: adc1_vol = 0x%x, adc2_vol = 0x%x, adc3_vol = 0x%x\n",
+			__func__, adc1_vol, adc2_vol, adc3_vol);
+		/*hmct add end*/
 		wcd937x->mbhc->wcd_mbhc.deinit_in_progress = true;
 		mbhc = &wcd937x->mbhc->wcd_mbhc;
 		if(mbhc->mbhc_cfg)
@@ -1762,6 +1835,11 @@ static int wcd937x_event_notify(struct notifier_block *block,
 				mdelay(500);
 		}
 		wcd937x->mbhc->wcd_mbhc.deinit_in_progress = false;
+       /*hmct add to rewrite the ADC volume after Modem reboot.*/
+		snd_soc_component_write(component, WCD937X_ANA_TX_CH1, adc1_vol);
+		snd_soc_component_write(component, WCD937X_ANA_TX_CH2, adc2_vol);
+		snd_soc_component_write(component, WCD937X_ANA_TX_CH3, adc3_vol);
+		/*hmct add end*/
 		break;
 	default:
 		dev_err(component->dev, "%s: invalid event %d\n", __func__,
@@ -1794,6 +1872,18 @@ static int __wcd937x_codec_enable_micbias(struct snd_soc_dapm_widget *w,
 	case SND_SOC_DAPM_PRE_PMU:
 		wcd937x_micbias_control(component, micb_num,
 				MICB_ENABLE, true);
+ /*** BSP : added by hmct to set  micbias1 2.8v @{ */
+#ifdef CONFIG_HIS_AUDIO_MICBIAS1_2POINT8  
+         if (micb_num == MIC_BIAS_1) 
+         {
+            snd_soc_component_update_bits(component, WCD937X_ANA_BIAS, 0x40, 0x40);   
+			snd_soc_component_update_bits(component, WCD937X_ANA_MICB1, 0x3F, 0x24);   
+          }
+		 if (micb_num == MIC_BIAS_3) { 
+		 	snd_soc_component_update_bits(component, WCD937X_ANA_BIAS, 0x40, 0x40);   
+			snd_soc_component_update_bits(component, WCD937X_ANA_MICB3, 0x3F, 0x24);  
+		 	}
+#endif /* CONFIG_HIS_AUDIO_MICBIAS1_2POINT8 */
 		break;
 	case SND_SOC_DAPM_POST_PMU:
 		usleep_range(1000, 1100);
@@ -1801,6 +1891,18 @@ static int __wcd937x_codec_enable_micbias(struct snd_soc_dapm_widget *w,
 	case SND_SOC_DAPM_POST_PMD:
 		wcd937x_micbias_control(component, micb_num,
 				MICB_DISABLE, true);
+		 /*** BSP : added by hmct to set  micbias1 2.8v @{ */
+#ifdef CONFIG_HIS_AUDIO_MICBIAS1_2POINT8
+         if (micb_num == MIC_BIAS_1){		
+		   snd_soc_component_update_bits(component, WCD937X_ANA_MICB1, 0x3F, 0x24);
+			snd_soc_component_update_bits(component, WCD937X_ANA_BIAS, 0x40, 0x00);   
+             }
+		 if (micb_num == MIC_BIAS_3){
+		 	snd_soc_component_update_bits(component, WCD937X_ANA_MICB3, 0x3F, 0x24); 
+			snd_soc_component_update_bits(component, WCD937X_ANA_BIAS, 0x40, 0x00); 
+		 	}
+#endif /* CONFIG_HIS_AUDIO_MICBIAS1_2POINT8 */
+/*** @} */
 		break;
 	};
 
@@ -2885,6 +2987,12 @@ static int wcd937x_soc_codec_probe(struct snd_soc_component *component)
 		pr_err("%s: mbhc initialization failed\n", __func__);
 		goto err_hwdep;
 	}
+/*hmct added, begin*/
+	ret = factory_spk_test_sysfs_init();
+	if (ret)
+		pr_err("factory spk test sysfs create fail\n");
+/*hmct added, end*/
+	
 	snd_soc_dapm_ignore_suspend(dapm, "AMIC1");
 	snd_soc_dapm_ignore_suspend(dapm, "AMIC2");
 	snd_soc_dapm_ignore_suspend(dapm, "AMIC3");
@@ -2964,6 +3072,7 @@ static void wcd937x_soc_codec_remove(struct snd_soc_component *component)
 		wcd937x->register_notifier(wcd937x->handle,
 						&wcd937x->nblock,
 						false);
+        factory_spk_test_sysfs_deinit();/*hmct added*/
 	wcd937x_mbhc_deinit(component);
 
 	return;

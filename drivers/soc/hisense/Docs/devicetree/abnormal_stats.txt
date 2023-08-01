@@ -1,0 +1,24 @@
+abnormal reset statistics
+============================================
+
+Description
+----------------
+the code mainly completes the statistics function of exception reset.
+When the device starts up, it needs to reserve 1M memory space for storing
+the exception information.
+
+List of legacy properties and respective binding document
+---------------------------------------------------------
+1. compatible                 "subsys-err-report"
+2. linux,contiguous-region    the reserve memory space
+
+For example:
+
+&soc {
+	subsys_err_report {
+		compatible = "subsys-err-report";
+		linux,contiguous-region = <&subsys_trap_mem>;
+		status = "okay";
+	};
+};
+

@@ -1,0 +1,25 @@
+running exception state recorder
+============================================
+
+Description
+----------------
+To analysis a device crash, before a device abnormally restarted, we need
+to record the information, such as dmesg, process information, interrupts,
+and so on. When the device starts up, it needs to reserve 4M memory space
+for storing these information.
+
+List of legacy properties and respective binding document
+---------------------------------------------------------
+1. compatible                 "rs-recorder"
+2. linux,contiguous-region    the reserve memory space
+
+For example:
+
+&soc {
+	rs_recorder {
+		compatible = "rs-recorder";
+		linux,contiguous-region = <&rs_recorder_mem>;
+		status = "okay";
+	};
+};
+

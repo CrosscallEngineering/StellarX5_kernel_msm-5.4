@@ -1,0 +1,28 @@
+qcom cpu chip fuse status
+============================================
+
+Description
+----------------
+Use to read the fuse status of current device
+
+List of legacy properties and respective binding document
+---------------------------------------------------------
+1. compatible                 "qcom,cpu-fused"
+2. qcom,cpuid-reg             cpu id register
+3. qcom,fuse-reg              fuse status register
+4. qcom,cpuid-valid-num       cpu valid number
+5. qcom,fuse-valid-num        fuse status valid number
+
+For example:
+
+&soc {
+	cpu_fuse_state {
+		compatible = "qcom,cpu-fused";
+		qcom,cpuid-reg = <0x60000100>;
+		qcom,fuse-reg  = <0x00780350>;
+		qcom,cpuid-valid-num = <0xFFFFFFFF>;
+		qcom,fuse-valid-num  = <0x00303030>;
+		status = "okay";
+	};
+};
+

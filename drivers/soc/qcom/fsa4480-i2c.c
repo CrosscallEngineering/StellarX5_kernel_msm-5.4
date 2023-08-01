@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
  */
-
+#define DEBUG
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/power_supply.h>
@@ -12,6 +12,19 @@
 #include <linux/usb/ucsi_glink.h>
 #include <linux/soc/qcom/fsa4480-i2c.h>
 #include <linux/iio/consumer.h>
+/*hmct add, begin*/
+#include <linux/iio/consumer.h>
+#include <linux/regulator/consumer.h>
+#include <linux/irqreturn.h>
+#include <linux/gpio.h>
+#include <linux/interrupt.h>
+#include <linux/of_gpio.h>
+#include <linux/pm_wakeup.h>
+//#include <linux/kallsyms.h>
+/*hmct add*/
+
+
+
 
 #define FSA4480_I2C_NAME	"fsa4480-driver"
 
@@ -29,6 +42,26 @@
 #define FSA4480_DELAY_L_AGND    0x10
 #define FSA4480_RESET           0x1E
 
+/*was4780 reg*/
+#define WAS4780_SWITCH_SETTINGS 0x04
+#define WAS4780_SWITCH_CONTROL  0x05
+#define WAS4780_SWITCH_STATUS1  0x07
+#define WAS4780_SLOW_L          0x08
+#define WAS4780_SLOW_R          0x09
+#define WAS4780_SLOW_MIC        0x0A
+#define WAS4780_SLOW_SENSE      0x0B
+#define WAS4780_SLOW_GND        0x0C
+#define WAS4780_DELAY_L_R       0x0D
+#define WAS4780_DELAY_L_MIC     0x0E
+#define WAS4780_DELAY_L_SENSE   0x0F
+#define WAS4780_DELAY_L_AGND    0x10
+#define WAS4780_FUN_EN		    0x12
+#define WAS4780_DET_INT		    0x18
+#define WAS4780_RESET           0x1E
+
+
+#define FSA4480_CHIP_ID         0x00
+
 struct fsa4480_priv {
 	struct regmap *regmap;
 	struct device *dev;
@@ -41,6 +74,7 @@ struct fsa4480_priv {
 	struct mutex notification_lock;
 	u32 use_powersupply;
 	int switch_control;
+	int rst_gpio;
 };
 
 struct fsa4480_reg_val {
@@ -222,6 +256,27 @@ done:
 	return rc;
 }
 
+
+static void WAS4780_autoset_switch(struct fsa4480_priv *fsa_priv)
+{
+	u32 rc;
+
+	if (!fsa_priv->regmap) {
+		dev_err(fsa_priv->dev, "%s: regmap invalid\n", __func__);
+		return;
+	}
+	/*start auto dectection*/
+	regmap_write(fsa_priv->regmap, WAS4780_FUN_EN, 0x0D);
+	msleep(10);
+	regmap_read(fsa_priv->regmap, WAS4780_DET_INT, &rc);
+	/* check auto switch finished */
+	dev_err(fsa_priv->dev, "%s: reg_0x18 = 0x%#x\n",__func__, rc);
+    //for codec 3/4 pole earphone setting
+    regmap_read(fsa_priv->regmap, WAS4780_SWITCH_STATUS1, &rc);
+    dev_err(fsa_priv->dev, "%s: reg_0x08 = 0x%#x\n",__func__, rc);
+    regmap_write(fsa_priv->regmap, WAS4780_SWITCH_SETTINGS, 0x9F);
+}
+
 static int fsa4480_usbc_analog_setup_switches_ucsi(
 						struct fsa4480_priv *fsa_priv)
 {
@@ -239,14 +294,15 @@ static int fsa4480_usbc_analog_setup_switches_ucsi(
 	/* get latest mode again within locked context */
 	mode = atomic_read(&(fsa_priv->usbc_mode));
 
-	dev_dbg(dev, "%s: setting GPIOs active = %d\n",
-		__func__, mode != TYPEC_ACCESSORY_NONE);
+	dev_dbg(dev, "%s: mode = %d\n",
+		__func__, mode );
 
 	switch (mode) {
 	/* add all modes FSA should notify for in here */
 	case TYPEC_ACCESSORY_AUDIO:
 		/* activate switches */
 		fsa4480_usbc_update_settings(fsa_priv, 0x00, 0x9F);
+		WAS4780_autoset_switch(fsa_priv);
 
 		/* notify call chain on event */
 		blocking_notifier_call_chain(&fsa_priv->fsa4480_notifier,
@@ -444,6 +500,13 @@ static int fsa4480_probe(struct i2c_client *i2c,
 	u32 use_powersupply = 0;
 	int rc = 0;
 
+	int chip_id=0;
+	//int err;
+	//int water_dect=0;
+//	struct device_node *np = i2c->dev.of_node;
+	 pr_info("%s: get the function\n", __func__);
+
+
 	fsa_priv = devm_kzalloc(&i2c->dev, sizeof(*fsa_priv),
 				GFP_KERNEL);
 	if (!fsa_priv)
@@ -451,6 +514,25 @@ static int fsa4480_probe(struct i2c_client *i2c,
 
 	memset(fsa_priv, 0, sizeof(struct fsa4480_priv));
 	fsa_priv->dev = &i2c->dev;
+
+/*hmct added, begin*/
+	fsa_priv->rst_gpio = of_get_named_gpio(fsa_priv->dev->of_node,"reset-gpio", 0);
+
+ 	if (gpio_is_valid(fsa_priv->rst_gpio)) {
+		rc = devm_gpio_request_one(fsa_priv->dev, fsa_priv->rst_gpio,GPIOF_OUT_INIT_LOW, "fsa4480_rst");
+		if (rc){
+			  pr_err("%s: rst request failed\n", __func__);
+			  rc = -EINVAL;
+			//  goto err_data;
+		}else{
+		   pr_info("%s: rst request ok\n", __func__);
+		}
+	}else{
+	      pr_err("%s: rst gpio is not valid\n", __func__);
+		  rc = -EINVAL;
+	      //goto err_data;	  
+	}
+/*hmct added, end*/
 
 	fsa_priv->regmap = devm_regmap_init_i2c(i2c, &fsa4480_regmap_config);
 	if (IS_ERR_OR_NULL(fsa_priv->regmap)) {
@@ -463,6 +545,11 @@ static int fsa4480_probe(struct i2c_client *i2c,
 		rc = PTR_ERR(fsa_priv->regmap);
 		goto err_data;
 	}
+
+    regmap_read(fsa_priv->regmap, FSA4480_CHIP_ID ,&chip_id);
+	pr_info("%s: chip_id is %d\n",__func__, chip_id);
+
+
 
 	fsa4480_update_reg_defaults(fsa_priv->regmap);
 

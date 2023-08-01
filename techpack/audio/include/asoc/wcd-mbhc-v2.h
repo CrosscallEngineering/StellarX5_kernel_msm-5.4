@@ -135,9 +135,12 @@ do {                                                    \
 				  SND_JACK_BTN_2 | SND_JACK_BTN_3 | \
 				  SND_JACK_BTN_4 | SND_JACK_BTN_5)
 #define OCP_ATTEMPT 20
-#define HS_DETECT_PLUG_TIME_MS (3 * 1000)
+
+/*hmct modified*/
+#define HS_DETECT_PLUG_TIME_MS (2 * 1000)
 #define SPECIAL_HS_DETECT_TIME_MS (2 * 1000)
 #define MBHC_BUTTON_PRESS_THRESHOLD_MIN 250
+/*hmct modified*/
 #define GND_MIC_SWAP_THRESHOLD 4
 #define GND_MIC_USBC_SWAP_THRESHOLD 2
 #define WCD_FAKE_REMOVAL_MIN_PERIOD_MS 100
@@ -550,6 +553,9 @@ struct wcd_mbhc {
 
 	wait_queue_head_t wait_btn_press;
 	bool is_btn_press;
+	/*add by hmct*/
+	bool is_hs_inserted;
+	
 	u8 current_plug;
 	bool in_swch_irq_handler;
 	bool hphl_swh; /*track HPHL switch NC / NO */

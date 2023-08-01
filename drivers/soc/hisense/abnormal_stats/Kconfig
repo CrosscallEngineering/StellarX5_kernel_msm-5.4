@@ -1,0 +1,15 @@
+config SUBSYS_ERR_WARM_RESET
+	bool "current platform support warm reset"
+	depends on SUBSYS_ERR_REPORT
+	default n
+	help
+	  If use platform support warm reset, then say Y,
+	  or N.
+
+config ABNORMAL_STATS_SAVE_FILE
+	bool "save abnormal reboot reason string to file"
+	depends on ABNORMAL_STATS
+	default n
+	help
+	  If set Y, save abnormal reboot reason to /kdebuginfo/rs_recorder/reboot_stats
+

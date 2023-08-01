@@ -1,0 +1,7 @@
+
+config USBADB_CUSTOM_KEY
+	bool "custom the adb backdoor key"
+	depends on HISENSE_ADB_BACKDOOR
+	default n
+	help
+	  Implement Change USB adb backdoor key

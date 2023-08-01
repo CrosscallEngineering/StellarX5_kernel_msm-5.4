@@ -1332,5 +1332,17 @@ config TOUCHSCREEN_SYNAPTICS_DSX
 source "drivers/input/touchscreen/synaptics_dsx/Kconfig"
 
 source "drivers/input/touchscreen/nt36xxx/Kconfig"
-
+source "drivers/input/touchscreen/nt36xxx_spi/Kconfig"
+config TOUCHSCREEN_USB_CHECK
+	bool "Touchpanel usb plugin check "
+	depends on INPUT_TOUCHSCREEN
+	help
+	  Say Y here if you want a touchscreen usb plugin check.
+	  If unsure, say N.
+config TOUCHSCREEN_WORK_MODE
+	bool "Touchscreen work mode set"
+	depends on INPUT_TOUCHSCREEN
+	help
+	  Say Y here if you want a touchscreen work mode set.
+	  If unsure, say N.
 endif

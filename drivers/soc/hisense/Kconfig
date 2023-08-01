@@ -1,0 +1,30 @@
+
+source "drivers/soc/hisense/base/Kconfig"
+
+source "drivers/soc/hisense/pm/Kconfig"
+
+source "drivers/soc/hisense/mm/Kconfig"
+
+source "drivers/soc/hisense/usb/Kconfig"
+
+source "drivers/soc/hisense/pmic/Kconfig"
+
+source "drivers/soc/hisense/debug/Kconfig"
+
+source "drivers/soc/hisense/efuse/Kconfig"
+
+source "drivers/soc/hisense/security/Kconfig"
+
+source "drivers/soc/hisense/sales_name/Kconfig"
+
+source "drivers/soc/hisense/abnormal_stats/Kconfig"
+
+source "drivers/soc/hisense/rs_recorder/Kconfig"
+
+source "drivers/soc/hisense/misc/Kconfig"
+
+source "drivers/soc/hisense/audio/Kconfig"
+
+source "drivers/soc/hisense/subsystem/Kconfig"
+
+source "drivers/soc/hisense/sensor/Kconfig"
