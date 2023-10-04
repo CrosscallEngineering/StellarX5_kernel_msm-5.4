@@ -74,7 +74,9 @@ case "$REQUIRED_DEFCONFIG" in
 		FINAL_DEFCONFIG_BLEND+=" $QCOM_GKI_FRAG "
 		;;
 	${PLATFORM_NAME}-debug_defconfig )
-		FINAL_DEFCONFIG_BLEND+=" $QCOM_GENERIC_DEBUG_FRAG "
+		# Remove debug for kernel config and replace by perf config
+		# FINAL_DEFCONFIG_BLEND+=" $QCOM_GENERIC_DEBUG_FRAG "
+		FINAL_DEFCONFIG_BLEND+=" $QCOM_GENERIC_PERF_FRAG "
 		;&
 	${PLATFORM_NAME}_defconfig )
 		FINAL_DEFCONFIG_BLEND+=" $QCOM_GENERIC_PERF_FRAG "
@@ -82,6 +84,8 @@ case "$REQUIRED_DEFCONFIG" in
 esac
 
 FINAL_DEFCONFIG_BLEND+=${BASE_DEFCONFIG}
+
+echo "FINAL_DEFCONFIG_BLEND = ${FINAL_DEFCONFIG_BLEND}"
 
 # Reverse the order of the configs for the override to work properly
 # Correct order is base_defconfig GKI.config QGKI.config consolidate.config debug.config
